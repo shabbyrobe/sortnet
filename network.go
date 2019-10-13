@@ -6,10 +6,14 @@ type CompareAndSwap struct {
 }
 
 type Network struct {
-	Ops   []CompareAndSwap
-	Size  int
+	Kind string
+	Ops  []CompareAndSwap
+	Size int
+
+	// Depth is defined (informally) as the largest number of comparators that any input
+	// value can encounter on its way through the network.
+	// Depth may not be calculated for certain networks, so it may be 0.
 	Depth int
-	Kind  string
 }
 
 // SortInts is a convenience; sorting networks are really only useful

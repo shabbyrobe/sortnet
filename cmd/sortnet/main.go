@@ -3,6 +3,11 @@ package main
 import (
 	"flag"
 	"fmt"
+	"image"
+	"image/color"
+	"image/draw"
+	"image/png"
+	"io"
 	"log"
 	"os"
 
@@ -52,7 +57,7 @@ func run() error {
 	case "swaps":
 		return printSwaps(net)
 	case "png":
-		return printPNG(net, f)
+		return printPNG(net, outFile)
 	default:
 		return fmt.Errorf("unknown output format")
 	}
@@ -70,7 +75,84 @@ func printPNG(net sortnet.Network, fileName string) error {
 		return fmt.Errorf("missing output filename (-o) for png")
 	}
 
-	for _, c := range net.Ops {
-		fmt.Printf("swap(%d, %d)\n", c.From, c.To)
+	var (
+		gridSize = 20
+		width    = len(net.Ops)*gridSize + gridSize
+		height   = net.Size*gridSize + gridSize
+
+		bgCol   = color.RGBA{32, 32, 32, 255}
+		slotCol = color.RGBA{128, 128, 128, 255}
+		joinCol = color.RGBA{224, 224, 224, 255}
+		dotCol  = color.RGBA{32, 160, 32, 255}
+
+		palette = color.Palette{bgCol, slotCol, joinCol, dotCol}
+	)
+
+	im := image.NewPaletted(image.Rect(0, 0, width, height), palette)
+	draw.Draw(im, im.Bounds(), &image.Uniform{bgCol}, image.Point{}, draw.Src)
+
+	// grid lines
+	for i := 0; i < net.Size; i++ {
+		y := (i*gridSize + gridSize)
+		dims := image.Rect(gridSize, y, width-gridSize, y+1)
+		draw.Draw(im, dims, &image.Uniform{slotCol}, image.Point{}, draw.Src)
 	}
+
+	for idx, c := range net.Ops {
+		x := (idx*gridSize + gridSize)
+		y1 := c.From*gridSize + gridSize
+		y2 := c.To*gridSize + gridSize
+
+		dims := image.Rect(x, y1, x+1, y2)
+		draw.Draw(im, dims, &image.Uniform{joinCol}, image.Point{}, draw.Src)
+
+		dot := &circle{image.Point{x, y1}, 4, dotCol}
+		draw.Draw(im, im.Bounds(), dot, image.Point{}, draw.Src)
+
+		dot.p.Y = y2
+		draw.Draw(im, im.Bounds(), dot, image.Point{}, draw.Src)
+	}
+
+	var w io.Writer
+
+	if fileName == "-" {
+		w = os.Stdout
+	} else {
+		f, err := os.Create(fileName)
+		if err != nil {
+			return err
+		}
+		defer func() {
+			if err := f.Close(); err != nil {
+				panic(err)
+			}
+		}()
+		w = f
+	}
+
+	if err := png.Encode(w, im); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+type circle struct {
+	p image.Point
+	r int
+	c color.RGBA
+}
+
+func (c *circle) ColorModel() color.Model { return color.RGBAModel }
+
+func (c *circle) Bounds() image.Rectangle {
+	return image.Rect(c.p.X-c.r, c.p.Y-c.r, c.p.X+c.r, c.p.Y+c.r)
+}
+
+func (c *circle) At(x, y int) color.Color {
+	xx, yy, rr := float64(x-c.p.X)+0.5, float64(y-c.p.Y)+0.5, float64(c.r)
+	if xx*xx+yy*yy < rr*rr {
+		return c.c
+	}
+	return color.RGBA{}
 }
