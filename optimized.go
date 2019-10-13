@@ -1,5 +1,11 @@
 package sortnet
 
+// This owes a huge debt to John Gamble for his Networksort Perl package, without which I
+// would not have known of the existence of these optimal networks. He has done the hard
+// work collecting the data for us to enjoy.
+//
+// https://metacpan.org/release/Algorithm-Networksort
+
 var (
 	Optimized = []Network{
 		Floyd9,

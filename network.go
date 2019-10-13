@@ -16,8 +16,11 @@ type Network struct {
 	Depth int
 }
 
-// SortInts is a convenience; sorting networks are really only useful
-// for small slices of a fixed size with a generated sort function.
+// SortInts is a convenience thst sorts the input list.
+//
+// Sorting networks are really only useful for small slices of a fixed size with a
+// generated sort function; use those or the sort package unless you really need this
+// convenience.
 func (n Network) SortInts(vs []int) {
 	for _, c := range n.Ops {
 		if vs[c.From] > vs[c.To] {
@@ -26,6 +29,12 @@ func (n Network) SortInts(vs []int) {
 	}
 }
 
+// SortIntsWithSwaps is a convenience that sorts the input list and returns the number of
+// swaps hat occurred.
+//
+// Sorting networks are really only useful for small slices of a fixed size with a
+// generated sort function; use those or the sort package unless you really need this
+// convenience.
 func (n Network) SortIntsWithSwaps(vs []int) (swaps int) {
 	for _, c := range n.Ops {
 		if vs[c.From] > vs[c.To] {
