@@ -21,7 +21,7 @@ This will generate forward and reverse sorters for string(2), and forward-only
 sorters for int(2) and uint(2):
 	-fwd -rev -size 2 string -rev=false int uint
 
-Each <input> contains a fully qualified type name and a 'sizespec', where 'sizespec'
+Each '<input>' contains a fully qualified type name and a 'sizespec', where 'sizespec'
 is a comma-separated list of ints or hyphen-separated int ranges.
 
 Generate forward and reverse sorting network of sizes 3-5 for float64:
@@ -134,7 +134,7 @@ type Command struct {
 
 func (cmd *Command) Flags(flags *flag.FlagSet) {
 	flags.StringVar(&cmd.pkg, "pkg", os.Getenv("GOPACKAGE"), "package name")
-	flags.StringVar(&cmd.out, "out", "sortnet_gen.go", "output file name ('-' for stdout)")
+	flags.StringVar(&cmd.out, "o", "sortnet_gen.go", "output file name ('-' for stdout)")
 	flags.BoolVar(&cmd.format, "format", true, "run gofmt on result")
 
 	cmd.inputFlags.slice = true

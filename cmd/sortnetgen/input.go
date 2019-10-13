@@ -123,7 +123,7 @@ func (in *Input) Validate() error {
 		}
 
 	} else {
-		if in.Reverse || in.Forward && (in.LessTemplate == nil && in.GreaterTemplate == nil) {
+		if (in.Reverse || in.Forward) && (in.LessTemplate == nil && in.GreaterTemplate == nil) {
 			return fmt.Errorf("no -less or -greater provided for non-builtin input - only builtins can be compared using '<' or '>' so you have to provide a function")
 		}
 	}
