@@ -65,6 +65,56 @@ func BenchmarkSortNetInts(b *testing.B) {
 	}
 }
 
+func BenchmarkSortNetCustom(b *testing.B) {
+	rng := rand.New(rand.NewSource(0))
+	customs := newRandCustoms(rng, 10000000, 1024)
+
+	for idx, tc := range []struct {
+		name   string
+		sz     int
+		sorter func([]Custom)
+	}{
+		{"", 2, NetworkSort2xCustom},
+		{"", 3, NetworkSort3xCustom},
+		{"", 4, NetworkSort4xCustom},
+		{"", 5, NetworkSort5xCustom},
+		{"", 6, NetworkSort6xCustom},
+		{"", 7, NetworkSort7xCustom},
+		{"", 8, NetworkSort8xCustom},
+		{"", 9, NetworkSort9xCustom},
+		{"", 10, NetworkSort10xCustom},
+		{"", 11, NetworkSort11xCustom},
+		{"", 12, NetworkSort12xCustom},
+		{"", 13, NetworkSort13xCustom},
+		{"", 14, NetworkSort14xCustom},
+		{"", 15, NetworkSort15xCustom},
+		{"", 16, NetworkSort16xCustom},
+		{"", 24, NetworkSort24xCustom},
+		{"", 32, NetworkSort32xCustom},
+		{"", 48, NetworkSort48xCustom},
+		{"", 64, NetworkSort64xCustom},
+	} {
+		_ = idx
+		b.Run(fmt.Sprintf("network-%d", tc.sz), func(b *testing.B) {
+			customs.Reset(b)
+			for i := 0; i < b.N; i++ {
+				cur := customs.Take(b, tc.sz)
+				tc.sorter(cur)
+			}
+		})
+
+		b.Run(fmt.Sprintf("stdslice-%d", tc.sz), func(b *testing.B) {
+			customs.Reset(b)
+			for i := 0; i < b.N; i++ {
+				cur := customs.Take(b, tc.sz)
+				sort.Slice(cur, func(i, j int) bool {
+					return cur[i].Foo < cur[j].Foo
+				})
+			}
+		})
+	}
+}
+
 type randInts struct {
 	rand *rand.Rand
 	vs   []int
@@ -94,6 +144,43 @@ func (r *randInts) Reset(b *testing.B) {
 }
 
 func (r *randInts) Take(b *testing.B, n int) []int {
+	if r.next+n >= r.sz {
+		r.Reset(b)
+	}
+	out := r.vs[r.next : r.next+n]
+	r.next += n
+	return out
+}
+
+type randCustoms struct {
+	rand *rand.Rand
+	vs   []Custom
+	next int
+	sz   int
+}
+
+func newRandCustoms(r *rand.Rand, sz int, max int) *randCustoms {
+	Customs := &randCustoms{
+		rand: r,
+		vs:   make([]Custom, sz),
+		sz:   sz,
+	}
+	for i := 0; i < sz; i++ {
+		Customs.vs[i] = Custom{r.Intn(max)}
+	}
+	return Customs
+}
+
+func (r *randCustoms) Reset(b *testing.B) {
+	b.StopTimer()
+	r.rand.Shuffle(r.sz, func(i, j int) {
+		r.vs[i], r.vs[j] = r.vs[j], r.vs[i]
+	})
+	r.next = 0
+	b.StartTimer()
+}
+
+func (r *randCustoms) Take(b *testing.B, n int) []Custom {
 	if r.next+n >= r.sz {
 		r.Reset(b)
 	}
