@@ -9,25 +9,23 @@ import (
 	"github.com/shabbyrobe/sortnet"
 )
 
-type Gen struct {
+type gen struct {
 	Input    Input
 	Network  sortnet.Network
 	Exported bool
 	Forwards bool
-	Slice    bool
-	Array    bool
 }
 
-func (g Gen) Last() int {
+func (g gen) Last() int {
 	return g.Network.Size - 1
 }
 
-func (g Gen) SliceName() string {
-	return g.Input.Name(g.Input.IsExported(), g.Network.Size, g.Forwards, "")
+func (g gen) SliceName() string {
+	return g.Input.Name(g.Input.isExported(), g.Network.Size, g.Forwards, "")
 }
 
-func (g Gen) ArrayName() string {
-	return g.Input.Name(g.Input.IsExported(), g.Network.Size, g.Forwards, "Array")
+func (g gen) ArrayName() string {
+	return g.Input.Name(g.Input.isExported(), g.Network.Size, g.Forwards, "Array")
 }
 
 var genFuncs = template.FuncMap{
@@ -49,7 +47,7 @@ var genFuncs = template.FuncMap{
 }
 
 var genTpl = template.Must(template.New("").Funcs(genFuncs).Parse(`
-{{ if .Slice }}
+{{ if .Input.Slice }}
 func {{.SliceName}}(a []{{.Input.Type}}) {
 	_ = a[{{.Last}}]
 	{{ range .Network.Ops }}
@@ -58,8 +56,8 @@ func {{.SliceName}}(a []{{.Input.Type}}) {
 }
 {{ end }}
 
-{{ if .Array }}
-func {{.ArrayName}}(a [{{.Network.Size}}]{{.Input.Type}}) {
+{{ if .Input.Array }}
+func {{.ArrayName}}(a *[{{.Network.Size}}]{{.Input.Type}}) {
 	{{ range .Network.Ops }}
 	{{- cas $.Input $.Forwards . }}
 	{{- end -}}
@@ -79,19 +77,18 @@ if a[{{.From}}] < a[{{.To}}] {
 }
 `))
 
-type WrapperKey struct {
+type wrapperKey struct {
 	Input    int
 	Forwards bool
 }
 
-type WrapperGen struct {
+type wrapperGen struct {
 	Input    Input
 	Forwards bool
 	Methods  map[int]string // template.Template visits these in order
-	Wrap     bool
 }
 
-func (w WrapperGen) Name() string {
+func (w wrapperGen) Name() string {
 	suffix := ""
 	if !w.Forwards {
 		suffix = "Reverse"
@@ -100,7 +97,7 @@ func (w WrapperGen) Name() string {
 }
 
 var wrapperTpl = template.Must(template.New("").Parse(`
-{{ if .Wrap }}
+{{ if .Input.Wrap }}
 // {{.Name}} sorts the input according to its length using a sorting network
 // if one is available. If the sort was applied, 'ok' is true, otherwise it
 // is false to allow you to perform your own sort as a fallback.

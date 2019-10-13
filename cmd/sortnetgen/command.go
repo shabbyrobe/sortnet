@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"strings"
 	"text/template"
 
 	"github.com/shabbyrobe/sortnet"
@@ -17,25 +16,23 @@ const Usage = `sortnetgen: generates a sorting network of specific sizes
 
 Usage: sortnetgen [options] <input>...
 
-Each <input> contains an optional reverse direction specifier, a fully qualified
-type name and a 'sizespec', in a fairly loose interpretation of the below grammar:
- 
-	<input>     = <dir>? <fqtype> ':' <sizespec>
-	<dir>       = '+'? '-'? 
-	<fqtype>    = ( <pkg> '.' ) <type>
-	<sizefix>   = [0-9]+
-	<sizerange> = [0-9]+ '-' [0-9]+
-	<size>      = <sizefix> | <sizerange>
-	<sizespec>  = <size> (, <size>)+
+Flags may appear at any point; they set the value for the remaining inputs.
+This will generate forward and reverse sorters for string(2), and forward-only
+sorters for int(2) and uint(2):
+	-fwd -rev string:2 -rev=false int:2 uint:2
+
+Each <input> contains a fully qualified type name and a 'sizespec', where 'sizespec'
+is a comma-separated list of 
+interpretation of the below grammar:
 
 Generate forward and reverse sorting network of sizes 3-5 for example.com/yep.Foo
-    +-example.com/yep.Foo:3-5
+    -fwd rev example.com/yep.Foo:3-5
 
 Generate forward sorting network of sizes 3-5 for example.com/yep.Foo
-    example.com/yep.Foo:3-5
+    -fwd example.com/yep.Foo:3-5
 
 Generate reverse sorting network of sizes 3, 4, 5 and 9 for string:
-    -string:3-5,9
+    -rev string:3-5,9
 
 The type will be the basis for the comparison. If <input> is a builtin primitive, '<' is
 used for comparisons, otherwise -castpl is used to determine how to compare and swap.
@@ -56,32 +53,79 @@ func IsUsageError(err error) bool {
 	return ok
 }
 
-type Command struct {
-	pkg             string
-	prefix          string
-	format          bool
+type inputFlags struct {
 	lessTemplate    string
 	greaterTemplate string
-	out             string
 	array           bool
 	slice           bool
 	wrap            bool
+	forward         bool
+	reverse         bool
+}
+
+func (i *inputFlags) parseAgain(args []string) ([]string, error) {
+	fs := flag.NewFlagSet("", flag.ContinueOnError)
+	i.Flags(fs)
+	if err := fs.Parse(args); err != nil {
+		return nil, err
+	}
+	args = fs.Args()
+	return args, nil
+}
+
+func (i *inputFlags) Flags(flags *flag.FlagSet) {
+	flags.BoolVar(&i.forward, "fwd", i.forward, "Generate ascending-order sorters (defaults to true if neither -fwd nor -rev passed)")
+	flags.BoolVar(&i.reverse, "rev", i.reverse, "Generate descending-order sorters")
+	flags.BoolVar(&i.array, "array", i.array, "Generate fixed-length array sorters")
+	flags.BoolVar(&i.slice, "slice", i.slice, "Generate slice sorters")
+	flags.BoolVar(&i.wrap, "wrap", i.wrap, "Generate wrapper sorter that chooses the right sort based on len(a) and returns false if none present")
+	flags.StringVar(&i.greaterTemplate, "greater", "", ""+
+		"'compare-and-swap' template that evaluates to true if the first value is greater "+
+		"than the second. Used if the sort values are structs.")
+	flags.StringVar(&i.lessTemplate, "less", "", ""+
+		"Like -greater, except used for reverse sorting")
+}
+
+func (i *inputFlags) BuildLessTemplate() (*template.Template, error) {
+	var err error
+	var lessTemplate *template.Template
+	if i.lessTemplate != "" {
+		lessTemplate, err = template.New("").Parse(i.lessTemplate)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return lessTemplate, nil
+}
+
+func (i *inputFlags) BuildGreaterTemplate() (*template.Template, error) {
+	var err error
+	var greaterTemplate *template.Template
+	if i.greaterTemplate != "" {
+		greaterTemplate, err = template.New("").Parse(i.greaterTemplate)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return greaterTemplate, nil
+}
+
+type Command struct {
+	inputFlags
+	pkg    string
+	prefix string
+	format bool
+	out    string
 }
 
 func (cmd *Command) Flags(flags *flag.FlagSet) {
 	flags.StringVar(&cmd.pkg, "pkg", os.Getenv("GOPACKAGE"), "package name")
-	flags.StringVar(&cmd.out, "out", "sortnet_gen.go", "output file name")
+	flags.StringVar(&cmd.out, "out", "sortnet_gen.go", "output file name ('-' for stdout)")
 	flags.BoolVar(&cmd.format, "format", true, "run gofmt on result")
-	flags.BoolVar(&cmd.array, "array", false, "Generate fixed-length array sorters")
-	flags.BoolVar(&cmd.slice, "slice", true, "Generate slice sorters")
-	flags.BoolVar(&cmd.wrap, "wrap", true, "Generate wrapper sorter that chooses the right sort based on len(a) and returns false if none present")
-	flags.StringVar(&cmd.greaterTemplate, "greater", "", ""+
-		"'compare-and-swap' template that evaluates to true if the first value is greater "+
-		"than the second. Used if the sort values are structs. "+
-		"Note: this may be passed multiple times and interleaved with <input>; "+
-		"each subsequent -less applies to the inputs to its right")
-	flags.StringVar(&cmd.lessTemplate, "less", "", ""+
-		"Like -greater, except used for reverse sorting")
+
+	cmd.inputFlags.slice = true
+	cmd.inputFlags.wrap = true
+	cmd.inputFlags.Flags(flags)
 }
 
 func (cmd *Command) Synopsis() string { return "Generate enum-ish helpers from a bag of constants" }
@@ -96,45 +140,46 @@ func (cmd *Command) Run(args ...string) (err error) {
 		return usageError("-pkg not set")
 	}
 
-	var lessTemplate, greaterTemplate *template.Template
-	if cmd.greaterTemplate != "" {
-		greaterTemplate, err = template.New("").Parse(cmd.greaterTemplate)
-		if err != nil {
-			return err
-		}
-	}
-
-	if cmd.lessTemplate != "" {
-		lessTemplate, err = template.New("").Parse(cmd.lessTemplate)
-		if err != nil {
-			return err
-		}
+	var curArgs = cmd.inputFlags
+	if !curArgs.forward && !curArgs.reverse {
+		curArgs.forward = true
 	}
 
 	var inputs = make([]Input, 0, len(args))
 	var idx = 0
 
-	// FIXME: we can use a flagset to keep parsing args after each input instead
-	// of the terrible hacks below, which can also help with --array and --slice
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-
-		arg, i, err = eatTemplate(lessTemplate, "less", args, i)
+	for {
+		args, err = curArgs.parseAgain(args)
 		if err != nil {
 			return err
 		}
-
-		arg, i, err = eatTemplate(greaterTemplate, "greater", args, i)
-		if err != nil {
-			return err
+		if len(args) == 0 {
+			break
 		}
+
+		var arg string
+		arg, args = args[0], args[1:]
 
 		input, err := ParseInput(arg, idx)
 		if err != nil {
 			return err
 		}
-		input.LessTemplate = lessTemplate
-		input.GreaterTemplate = greaterTemplate
+		input.Slice = curArgs.slice
+		input.Array = curArgs.array
+		input.Wrap = curArgs.wrap
+		input.Forward = curArgs.forward
+		input.Reverse = curArgs.reverse
+
+		input.LessTemplate, err = curArgs.BuildLessTemplate()
+		if err != nil {
+			return err
+		}
+
+		input.GreaterTemplate, err = curArgs.BuildGreaterTemplate()
+		if err != nil {
+			return err
+		}
+
 		if err := input.ensureTemplates(); err != nil {
 			return err
 		}
@@ -158,19 +203,17 @@ func (cmd *Command) Run(args ...string) (err error) {
 	}
 
 	var genBuf bytes.Buffer
-	var wrappers = map[WrapperKey]*WrapperGen{}
+	var wrappers = map[wrapperKey]*wrapperGen{}
 
 	{ // Individual networks
-		var gens []Gen
+		var gens []gen
 		for inputIndex, input := range inputs {
 			for _, sz := range input.Sizes {
 				net := sortnet.New(sz)
-				gen := Gen{
+				g := gen{
 					Input:    input,
-					Exported: input.IsExported(),
+					Exported: input.isExported(),
 					Network:  net,
-					Slice:    cmd.slice,
-					Array:    cmd.array,
 				}
 
 				fwds := []bool{}
@@ -182,19 +225,16 @@ func (cmd *Command) Run(args ...string) (err error) {
 				}
 
 				for _, fwd := range fwds {
-					gen.Forwards = fwd
-					gens = append(gens, gen)
-					if wg := wrappers[WrapperKey{inputIndex, fwd}]; wg == nil {
-						wrappers[WrapperKey{inputIndex, fwd}] = &WrapperGen{
+					g.Forwards = fwd
+					gens = append(gens, g)
+					if wg := wrappers[wrapperKey{inputIndex, fwd}]; wg == nil {
+						wrappers[wrapperKey{inputIndex, fwd}] = &wrapperGen{
 							Input:    input,
 							Forwards: fwd,
 							Methods:  map[int]string{},
-
-							// FIXME: move into input to allow accumulation of flags
-							Wrap: cmd.wrap,
 						}
 					}
-					wrappers[WrapperKey{inputIndex, fwd}].Methods[sz] = gen.SliceName()
+					wrappers[wrapperKey{inputIndex, fwd}].Methods[sz] = g.SliceName()
 				}
 			}
 		}
@@ -230,49 +270,24 @@ func (cmd *Command) Run(args ...string) (err error) {
 	}
 
 	{ // Write output
-		var write bool
-		existing, err := ioutil.ReadFile(cmd.out)
-		if os.IsNotExist(err) || err == nil {
-			write = true
-		} else if err != nil {
-			return err
-		} else if !bytes.Equal(out, existing) {
-			write = true
-		}
+		if cmd.out == "-" {
+			os.Stdout.Write(out)
+		} else {
+			var write bool
+			existing, err := ioutil.ReadFile(cmd.out)
+			if os.IsNotExist(err) || err == nil {
+				write = true
+			} else if err != nil {
+				return err
+			} else if !bytes.Equal(out, existing) {
+				write = true
+			}
 
-		if write {
-			return ioutil.WriteFile(cmd.out, out, 0644)
+			if write {
+				return ioutil.WriteFile(cmd.out, out, 0644)
+			}
 		}
 	}
 
 	return nil
-}
-
-func eatTemplate(into *template.Template, name string, args []string, idx int) (arg string, next int, err error) {
-	next = idx
-	arg = args[next]
-
-	var tplStr string
-	if arg == "-"+name || arg == "--"+name {
-		next++
-		if next >= len(args) {
-			err = fmt.Errorf("-%s missing value", name)
-			return
-		}
-		tplStr = args[next]
-
-	} else if strings.HasPrefix(arg, "-"+name+"=") || strings.HasPrefix(arg, "--"+name+"=") {
-		parts := strings.SplitN(arg, "=", 2)
-		tplStr = parts[1]
-
-	} else {
-		return arg, next, nil
-	}
-
-	tpl, err := template.New("").Parse(tplStr)
-	if err != nil {
-		return arg, next, err
-	}
-	*into = *tpl
-	return arg, next, nil
 }

@@ -12,20 +12,47 @@ import (
 )
 
 type Input struct {
-	Raw             string
-	Index           int
-	Forward         bool
-	Reverse         bool
-	Sizes           []int
-	Package         string
-	Type            string
-	LessTemplate    *template.Template
+	Raw     string
+	Index   int
+	Forward bool
+	Reverse bool
+	Sizes   []int
+	Package string
+	Type    string
+	Slice   bool
+	Array   bool
+	Wrap    bool
+
+	// LessTemplate should presume the existence of the indexable 'a', which is the
+	// slice/array being sorted.
+	//
+	// The `{{.From}}` and `{{.To}}` values are made available to the template, for
+	// accessing the comparator's 'from index' and 'to index', respectively.
+	//
+	// The LessTemplate for standard comparable primitives looks like this:
+	//
+	//  if a[{{.From}}] < a[{{.To}}] {
+	//		a[{{.From}}], a[{{.To}}] = a[{{.To}}], a[{{.From}}]
+	//	}
+	LessTemplate *template.Template
+
+	// GreaterTemplate should presume the existence of the indexable 'a', which is the
+	// slice/array being sorted.
+	//
+	// The `{{.From}}` and `{{.To}}` values are made available to the template, for
+	// accessing the comparator's 'from index' and 'to index', respectively.
+	//
+	// The GreaterTemplate for standard comparable primitives looks like this:
+	//
+	//  if a[{{.From}}] > a[{{.To}}] {
+	//		a[{{.From}}], a[{{.To}}] = a[{{.To}}], a[{{.From}}]
+	//	}
 	GreaterTemplate *template.Template
 }
 
 func (in *Input) TypeNamePart() string {
 	typ := in.Type
-	if in.IsComparableBuiltin() {
+	if in.isComparableBuiltin() {
 		typ = strings.ToUpper(typ[:1]) + typ[1:]
 	}
 	return typ
@@ -36,19 +63,19 @@ func (in *Input) Name(exported bool, sz int, fwd bool, suffix string) (out strin
 	if !exported {
 		prefix = "networkSort"
 	}
-	out = fmt.Sprintf("%s%s%d%s", prefix, in.TypeNamePart(), sz, suffix)
+	out = fmt.Sprintf("%s%dx%s%s", prefix, sz, in.TypeNamePart(), suffix)
 	if !fwd {
 		out += "Reverse"
 	}
 	return out
 }
 
-func (in *Input) IsExported() bool {
+func (in *Input) isExported() bool {
 	r, _ := utf8.DecodeRuneInString(in.Type)
-	return in.IsComparableBuiltin() || unicode.IsUpper(r)
+	return in.isComparableBuiltin() || unicode.IsUpper(r)
 }
 
-func (in *Input) IsComparableBuiltin() bool {
+func (in *Input) isComparableBuiltin() bool {
 	return in.Package == "" && (in.Type == "string" ||
 		in.Type == "int" ||
 		in.Type == "int8" ||
@@ -66,7 +93,7 @@ func (in *Input) IsComparableBuiltin() bool {
 
 func (in *Input) ensureTemplates() error {
 	if in.Reverse && in.LessTemplate == nil {
-		if in.IsComparableBuiltin() {
+		if in.isComparableBuiltin() {
 			in.LessTemplate = defaultCASLessTpl
 		} else {
 			return fmt.Errorf("no -less template provided for non-builtin input %q at index %d", in.Raw, in.Index+1)
@@ -74,7 +101,7 @@ func (in *Input) ensureTemplates() error {
 	}
 
 	if in.Forward && in.GreaterTemplate == nil {
-		if in.IsComparableBuiltin() {
+		if in.isComparableBuiltin() {
 			in.GreaterTemplate = defaultCASGreaterTpl
 		} else {
 			return fmt.Errorf("no -greater template provided for non-builtin input %q at index %d", in.Raw, in.Index+1)
@@ -85,15 +112,13 @@ func (in *Input) ensureTemplates() error {
 }
 
 const (
-	inputDir   = 1
-	inputPkg   = 2
-	inputTyp   = 3
-	inputSizes = 4
+	inputPkg   = 1
+	inputTyp   = 2
+	inputSizes = 3
 )
 
 var inputPattern = regexp.MustCompile(`` +
 	`^` +
-	`(?P<dir>[+\-]{0,2})?` +
 	`(?:(?P<pkg>.*)\.)?` + // Greedy
 	`(?P<typ>.*?)` +
 	`:` +
@@ -117,17 +142,6 @@ func ParseInput(s string, idx int) (input Input, err error) {
 	match := inputPattern.FindStringSubmatch(s)
 	if len(match) == 0 {
 		return input, fmt.Errorf("invalid input %q", s)
-	}
-
-	for _, c := range match[inputDir] {
-		if c == '+' {
-			input.Forward = true
-		} else if c == '-' {
-			input.Reverse = true
-		}
-	}
-	if !input.Forward && !input.Reverse {
-		input.Forward = true
 	}
 
 	input.Raw = s
