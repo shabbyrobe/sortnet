@@ -76,12 +76,14 @@ func printPNG(net sortnet.Network, fileName string) error {
 	}
 
 	var (
-		gridSize = 20
-		width    = len(net.Ops)*gridSize + gridSize
-		height   = net.Size*gridSize + gridSize
+		xSize     = 20
+		ySize     = 15
+		dotRadius = 4
+		width     = len(net.Ops)*xSize + xSize
+		height    = net.Size*ySize + ySize
 
-		bgCol   = color.RGBA{32, 32, 32, 255}
-		slotCol = color.RGBA{128, 128, 128, 255}
+		bgCol   = color.RGBA{16, 16, 16, 255}
+		slotCol = color.RGBA{96, 96, 96, 255}
 		joinCol = color.RGBA{224, 224, 224, 255}
 		dotCol  = color.RGBA{32, 160, 32, 255}
 
@@ -93,20 +95,20 @@ func printPNG(net sortnet.Network, fileName string) error {
 
 	// grid lines
 	for i := 0; i < net.Size; i++ {
-		y := (i*gridSize + gridSize)
-		dims := image.Rect(gridSize, y, width-gridSize, y+1)
+		y := (i*ySize + ySize)
+		dims := image.Rect(xSize, y, width-xSize, y+1)
 		draw.Draw(im, dims, &image.Uniform{slotCol}, image.Point{}, draw.Src)
 	}
 
 	for idx, c := range net.Ops {
-		x := (idx*gridSize + gridSize)
-		y1 := c.From*gridSize + gridSize
-		y2 := c.To*gridSize + gridSize
+		x := (idx*xSize + xSize)
+		y1 := c.From*ySize + ySize
+		y2 := c.To*ySize + ySize
 
 		dims := image.Rect(x, y1, x+1, y2)
 		draw.Draw(im, dims, &image.Uniform{joinCol}, image.Point{}, draw.Src)
 
-		dot := &circle{image.Point{x, y1}, 4, dotCol}
+		dot := &circle{image.Point{x, y1}, dotRadius, dotCol}
 		draw.Draw(im, im.Bounds(), dot, image.Point{}, draw.Src)
 
 		dot.p.Y = y2
