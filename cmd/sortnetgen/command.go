@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strings"
 	"text/template"
 
 	"github.com/shabbyrobe/sortnet"
@@ -19,7 +20,7 @@ Usage: sortnetgen [options] <input>...
 Flags may appear at any point; they set the value for the remaining inputs.
 This will generate forward and reverse sorters for string(2), and forward-only
 sorters for int(2) and uint(2):
-	-fwd -rev -size 2 string -rev=false int uint
+    -fwd -rev -size 2 string -rev=false int uint
 
 Each '<input>' contains a fully qualified type name and a 'sizespec', where 'sizespec'
 is a comma-separated list of ints or hyphen-separated int ranges.
@@ -38,11 +39,11 @@ used for comparisons, otherwise -greater and -less are used to determine how to 
 and swap for -fwd and -rev sorts respectively.
 
 Generate forward sorting network of size 2 for example.com/foo.Yep, providing -greater:
-	-size 2 -greater 'foo.YepCASGreater(&a[{{.From}}], &a[{{.To}}])' example.com/foo.Yep
+    -size 2 -greater 'foo.YepCASGreater(&a[{{.From}}], &a[{{.To}}])' example.com/foo.Yep
 
 If neither '{{.From}}' nor '{{.To}}' are present in the template, it is presumed to
 be a function. The following is equivalent to the previous example:
-	-size 2 -greater 'foo.YepCASGreater' example.com/foo.Yep
+    -size 2 -greater 'foo.YepCASGreater' example.com/foo.Yep
 
 Only one of -less or -greater needs to be provided, regardless of whether -fwd and/or
 -rev are passed. If -less is passed but only -fwd is used, the generator knows how to
@@ -84,20 +85,10 @@ func (i *inputFlags) Flags(flags *flag.FlagSet) {
 	flags.BoolVar(&i.reverse, "rev", i.reverse, "Generate descending-order sorters")
 	flags.BoolVar(&i.array, "array", i.array, "Generate fixed-length array sorters")
 	flags.BoolVar(&i.slice, "slice", i.slice, "Generate slice sorters")
-	flags.BoolVar(&i.wrap, "wrap", i.wrap, ""+
-		"Generate wrapper sorter that chooses the right sort based on len(a) "+
-		"and returns false if none present")
-
-	flags.StringVar(&i.greaterTemplate, "greater", i.greaterTemplate, ""+
-		"'compare-and-swap' template that evaluates to true if the first value is greater "+
-		"than the second. Used if the sort values are structs.")
-
-	flags.StringVar(&i.lessTemplate, "less", i.lessTemplate, ""+
-		"Like -greater, except used for reverse sorting")
-
-	flags.Var(&i.sizes, "size", ""+
-		"Size set; comma separated list of individual sizes or ranges, for e.g. "+
-		"'2,3,5-7' will generate sortnets for 2, 3, 5, 6 and 7 items")
+	flags.BoolVar(&i.wrap, "wrap", i.wrap, "Generate wrapper sorter that chooses the right sort based on len(a)")
+	flags.StringVar(&i.greaterTemplate, "greater", i.greaterTemplate, "Template for 'compare-and-swap' function")
+	flags.StringVar(&i.lessTemplate, "less", i.lessTemplate, "Like -greater, except used for reverse sorting")
+	flags.Var(&i.sizes, "size", "Size set; comma separated list of individual sizes or ranges")
 }
 
 func (i *inputFlags) BuildLessTemplate() (*template.Template, error) {
@@ -144,7 +135,7 @@ func (cmd *Command) Flags(flags *flag.FlagSet) {
 
 func (cmd *Command) Synopsis() string { return "Generate enum-ish helpers from a bag of constants" }
 
-func (cmd *Command) Usage() string { return Usage }
+func (cmd *Command) Usage() string { return strings.Replace(Usage, "\t", "    ", -1) }
 
 func (cmd *Command) readInputs(args []string) ([]Input, error) {
 	var curArgs = cmd.inputFlags
