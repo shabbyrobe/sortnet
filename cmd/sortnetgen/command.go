@@ -19,29 +19,34 @@ Usage: sortnetgen [options] <input>...
 Flags may appear at any point; they set the value for the remaining inputs.
 This will generate forward and reverse sorters for string(2), and forward-only
 sorters for int(2) and uint(2):
-	-fwd -rev string:2 -rev=false int:2 uint:2
+	-fwd -rev -size 2 string -rev=false int uint
 
 Each <input> contains a fully qualified type name and a 'sizespec', where 'sizespec'
-is a comma-separated list of 
-interpretation of the below grammar:
+is a comma-separated list of ints or hyphen-separated int ranges.
 
-Generate forward and reverse sorting network of sizes 3-5 for example.com/yep.Foo
-    -fwd rev example.com/yep.Foo:3-5
+Generate forward and reverse sorting network of sizes 3-5 for float64:
+    -fwd -rev -size 3-5 float64
 
-Generate forward sorting network of sizes 3-5 for example.com/yep.Foo
-    -fwd example.com/yep.Foo:3-5
+Generate forward sorting network of sizes 3-5 for int64
+    -fwd -size 3-5 int64
 
 Generate reverse sorting network of sizes 3, 4, 5 and 9 for string:
-    -rev string:3-5,9
+    -rev size 3-5, string
 
 The type will be the basis for the comparison. If <input> is a builtin primitive, '<' is
-used for comparisons, otherwise -castpl is used to determine how to compare and swap.
+used for comparisons, otherwise -greater and -less are used to determine how to compare
+and swap for -fwd and -rev sorts respectively.
 
-If the type contains a package, it is imported. It is not validated.
+Generate forward sorting network of size 2 for example.com/foo.Yep, providing -greater:
+	-size 2 -greater 'foo.YepCASGreater(&a[{{.From}}], &a[{{.To}}])' example.com/foo.Yep
 
-If the leading direction specifier is not present, '+' is inferred, otherwise if '+' is
-found, a forward sort method is generated and if '-' is found, a reverse sort method is
-generated.
+If neither '{{.From}}' nor '{{.To}}' are present in the template, it is presumed to
+be a function. The following is equivalent to the previous example:
+	-size 2 -greater 'foo.YepCASGreater' example.com/foo.Yep
+
+Only one of -less or -greater needs to be provided, regardless of whether -fwd and/or
+-rev are passed. If -less is passed but only -fwd is used, the generator knows how to
+call the function with the correct arguments.
 `
 
 type usageError string
@@ -61,9 +66,10 @@ type inputFlags struct {
 	wrap            bool
 	forward         bool
 	reverse         bool
+	sizes           sizeSpec
 }
 
-func (i *inputFlags) parseAgain(args []string) ([]string, error) {
+func (i *inputFlags) parseFlagsAgain(args []string) ([]string, error) {
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
 	i.Flags(fs)
 	if err := fs.Parse(args); err != nil {
@@ -78,19 +84,27 @@ func (i *inputFlags) Flags(flags *flag.FlagSet) {
 	flags.BoolVar(&i.reverse, "rev", i.reverse, "Generate descending-order sorters")
 	flags.BoolVar(&i.array, "array", i.array, "Generate fixed-length array sorters")
 	flags.BoolVar(&i.slice, "slice", i.slice, "Generate slice sorters")
-	flags.BoolVar(&i.wrap, "wrap", i.wrap, "Generate wrapper sorter that chooses the right sort based on len(a) and returns false if none present")
-	flags.StringVar(&i.greaterTemplate, "greater", "", ""+
+	flags.BoolVar(&i.wrap, "wrap", i.wrap, ""+
+		"Generate wrapper sorter that chooses the right sort based on len(a) "+
+		"and returns false if none present")
+
+	flags.StringVar(&i.greaterTemplate, "greater", i.greaterTemplate, ""+
 		"'compare-and-swap' template that evaluates to true if the first value is greater "+
 		"than the second. Used if the sort values are structs.")
-	flags.StringVar(&i.lessTemplate, "less", "", ""+
+
+	flags.StringVar(&i.lessTemplate, "less", i.lessTemplate, ""+
 		"Like -greater, except used for reverse sorting")
+
+	flags.Var(&i.sizes, "size", ""+
+		"Size set; comma separated list of individual sizes or ranges, for e.g. "+
+		"'2,3,5-7' will generate sortnets for 2, 3, 5, 6 and 7 items")
 }
 
 func (i *inputFlags) BuildLessTemplate() (*template.Template, error) {
 	var err error
 	var lessTemplate *template.Template
 	if i.lessTemplate != "" {
-		lessTemplate, err = template.New("").Parse(i.lessTemplate)
+		lessTemplate, err = BuildComparatorTemplate(i.lessTemplate)
 		if err != nil {
 			return nil, err
 		}
@@ -102,7 +116,7 @@ func (i *inputFlags) BuildGreaterTemplate() (*template.Template, error) {
 	var err error
 	var greaterTemplate *template.Template
 	if i.greaterTemplate != "" {
-		greaterTemplate, err = template.New("").Parse(i.greaterTemplate)
+		greaterTemplate, err = BuildComparatorTemplate(i.greaterTemplate)
 		if err != nil {
 			return nil, err
 		}
@@ -132,6 +146,60 @@ func (cmd *Command) Synopsis() string { return "Generate enum-ish helpers from a
 
 func (cmd *Command) Usage() string { return Usage }
 
+func (cmd *Command) readInputs(args []string) ([]Input, error) {
+	var curArgs = cmd.inputFlags
+	if !curArgs.forward && !curArgs.reverse {
+		curArgs.forward = true
+	}
+
+	var err error
+	var inputs = make([]Input, 0, len(args))
+	var idx = 0
+
+	for {
+		args, err = curArgs.parseFlagsAgain(args)
+		if err != nil {
+			return nil, err
+		}
+		if len(args) == 0 {
+			break
+		}
+
+		var arg string
+		arg, args = args[0], args[1:]
+		idx++
+
+		input, err := ParseInput(arg)
+		if err != nil {
+			return nil, err
+		}
+		input.Slice = curArgs.slice
+		input.Array = curArgs.array
+		input.Wrap = curArgs.wrap
+		input.Forward = curArgs.forward
+		input.Reverse = curArgs.reverse
+		input.Sizes = curArgs.sizes.items
+
+		input.LessTemplate, err = curArgs.BuildLessTemplate()
+		if err != nil {
+			return nil, err
+		}
+
+		input.GreaterTemplate, err = curArgs.BuildGreaterTemplate()
+		if err != nil {
+			return nil, err
+		}
+		if err := input.Validate(); err != nil {
+			return nil, fmt.Errorf("input %q failed at index %d: %w", arg, idx, err)
+		}
+
+		inputs = append(inputs, input)
+		idx++
+	}
+
+	return inputs, nil
+}
+
 func (cmd *Command) Run(args ...string) (err error) {
 	if cmd.out == "" {
 		return usageError("-out not set")
@@ -140,51 +208,9 @@ func (cmd *Command) Run(args ...string) (err error) {
 		return usageError("-pkg not set")
 	}
 
-	var curArgs = cmd.inputFlags
-	if !curArgs.forward && !curArgs.reverse {
-		curArgs.forward = true
-	}
-
-	var inputs = make([]Input, 0, len(args))
-	var idx = 0
-
-	for {
-		args, err = curArgs.parseAgain(args)
-		if err != nil {
-			return err
-		}
-		if len(args) == 0 {
-			break
-		}
-
-		var arg string
-		arg, args = args[0], args[1:]
-
-		input, err := ParseInput(arg, idx)
-		if err != nil {
-			return err
-		}
-		input.Slice = curArgs.slice
-		input.Array = curArgs.array
-		input.Wrap = curArgs.wrap
-		input.Forward = curArgs.forward
-		input.Reverse = curArgs.reverse
-
-		input.LessTemplate, err = curArgs.BuildLessTemplate()
-		if err != nil {
-			return err
-		}
-
-		input.GreaterTemplate, err = curArgs.BuildGreaterTemplate()
-		if err != nil {
-			return err
-		}
-
-		if err := input.ensureTemplates(); err != nil {
-			return err
-		}
-		inputs = append(inputs, input)
-		idx++
+	inputs, err := cmd.readInputs(args)
+	if err != nil {
+		return err
 	}
 
 	var buf bytes.Buffer

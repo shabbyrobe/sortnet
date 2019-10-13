@@ -31,16 +31,22 @@ func (g gen) ArrayName() string {
 var genFuncs = template.FuncMap{
 	"cas": func(input Input, fwd bool, op sortnet.CompareAndSwap) string {
 		var buf bytes.Buffer
-		var tpl *template.Template
+		var tpl, other *template.Template
 
 		if fwd {
-			tpl = input.GreaterTemplate
+			tpl, other = input.GreaterTemplate, input.LessTemplate
 		} else {
-			tpl = input.LessTemplate
+			tpl, other = input.LessTemplate, input.GreaterTemplate
 		}
 
-		if err := tpl.Execute(&buf, op); err != nil {
-			panic(err)
+		if tpl != nil {
+			if err := tpl.Execute(&buf, op); err != nil {
+				panic(err)
+			}
+		} else {
+			if err := other.Execute(&buf, op.Reverse()); err != nil {
+				panic(err)
+			}
 		}
 		return strings.TrimSpace(buf.String()) + "\n"
 	},

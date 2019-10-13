@@ -1,10 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"regexp"
-	"sort"
-	"strconv"
 	"strings"
 	"text/template"
 	"unicode"
@@ -111,54 +110,70 @@ func (in *Input) isComparableBuiltin() bool {
 		in.Type == "float64")
 }
 
-func (in *Input) ensureTemplates() error {
-	if in.Reverse && in.LessTemplate == nil {
-		if in.isComparableBuiltin() {
-			in.LessTemplate = defaultCASLessTpl
-		} else {
-			return fmt.Errorf("no -less template provided for non-builtin input")
+func (in *Input) Validate() error {
+	if len(in.Sizes) == 0 {
+		return fmt.Errorf("no sizes to generate")
+	}
+
+	for _, sz := range in.Sizes {
+		if sz <= 0 {
+			return fmt.Errorf("sizes must be >= 1")
 		}
 	}
 
-	if in.Forward && in.GreaterTemplate == nil {
-		if in.isComparableBuiltin() {
+	if in.isComparableBuiltin() {
+		if in.LessTemplate == nil {
+			in.LessTemplate = defaultCASLessTpl
+		}
+		if in.GreaterTemplate == nil {
 			in.GreaterTemplate = defaultCASGreaterTpl
-		} else {
-			return fmt.Errorf("no -greater template provided for non-builtin input")
+		}
+
+	} else {
+		if in.Reverse || in.Forward && (in.LessTemplate == nil && in.GreaterTemplate == nil) {
+			return fmt.Errorf("no -less or -greater provided for non-builtin input - only builtins can be compared using '<' or '>' so you have to provide a function")
 		}
 	}
 
 	return nil
 }
 
+func BuildComparatorTemplate(raw string) (*template.Template, error) {
+	tpl, err := template.New("").Parse(raw)
+	if err != nil {
+		return nil, err
+	}
+
+	var buf bytes.Buffer
+	if err := tpl.Execute(&buf, map[string]string{"From": "1", "To": "2"}); err != nil {
+		return nil, err
+	}
+
+	// If there are no substitutions, presume the input template contains a function
+	// name only.
+	if buf.String() == raw {
+		tpl, err = template.New("").Parse(raw + "(&a[{{.From}}], &a[{{.To}}])")
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return tpl, nil
+}
+
 const (
-	inputPkg   = 1
-	inputTyp   = 2
-	inputSizes = 3
+	inputPkg = 1
+	inputTyp = 2
 )
 
 var inputPattern = regexp.MustCompile(`` +
 	`^` +
 	`(?:(?P<pkg>.*)\.)?` + // Greedy
 	`(?P<typ>.*?)` +
-	`:` +
-	`(?P<sizes>.*?)` +
 	`$`,
 )
 
-const (
-	sizeSize = 1
-	sizeTo   = 2
-)
-
-var sizePattern = regexp.MustCompile(`` +
-	`^` +
-	`(?P<size>[0-9]+)` +
-	`(?:-(?P<to>[0-9]+))?` +
-	`$`,
-)
-
-func ParseInput(s string, idx int) (input Input, err error) {
+func ParseInput(s string) (input Input, err error) {
 	match := inputPattern.FindStringSubmatch(s)
 	if len(match) == 0 {
 		return input, fmt.Errorf("invalid input %q", s)
@@ -166,46 +181,6 @@ func ParseInput(s string, idx int) (input Input, err error) {
 
 	input.Package = match[inputPkg]
 	input.Type = match[inputTyp]
-
-	sizeSet := make(map[int]bool)
-	for _, sizePart := range strings.Split(match[inputSizes], ",") {
-		sizeMatch := sizePattern.FindStringSubmatch(sizePart)
-		if len(sizeMatch) == 0 {
-			return input, fmt.Errorf("invalid size %q", sizePart)
-		}
-
-		from, err := strconv.ParseInt(sizeMatch[sizeSize], 10, 0)
-		if err != nil {
-			return input, fmt.Errorf("size was not numeric in %q", sizePart)
-		}
-		to := from
-		if sizeMatch[sizeTo] != "" {
-			to, err = strconv.ParseInt(sizeMatch[sizeTo], 10, 0)
-			if err != nil {
-				return input, fmt.Errorf("size range end was not numeric in %q", sizePart)
-			}
-		}
-		if to < from {
-			return input, fmt.Errorf("size range end was before start in %q", sizePart)
-		}
-
-		for i := from; i <= to; i++ {
-			if i <= 0 {
-				return input, fmt.Errorf("sort size must be >= 1, found %d", i)
-			}
-			sizeSet[int(i)] = true
-		}
-	}
-
-	for sz := range sizeSet {
-		input.Sizes = append(input.Sizes, sz)
-	}
-
-	sort.Ints(input.Sizes)
-
-	if len(input.Sizes) == 0 {
-		return input, fmt.Errorf("input %q contained no sizes", s)
-	}
 
 	return input, nil
 }

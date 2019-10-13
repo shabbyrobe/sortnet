@@ -5,6 +5,11 @@ type CompareAndSwap struct {
 	To   int
 }
 
+func (c CompareAndSwap) Reverse() CompareAndSwap {
+	c.From, c.To = c.To, c.From // Yikes, this is a bit meta
+	return c
+}
+
 type Network struct {
 	Kind string
 	Ops  []CompareAndSwap
