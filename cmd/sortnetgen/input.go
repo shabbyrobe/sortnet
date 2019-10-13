@@ -12,16 +12,36 @@ import (
 )
 
 type Input struct {
-	Raw     string
-	Index   int
 	Forward bool
 	Reverse bool
 	Sizes   []int
 	Package string
 	Type    string
-	Slice   bool
-	Array   bool
-	Wrap    bool
+
+	// Generate a sorting network that operates on a slice, for example:
+	// NetworkSort2xFloat64(a []float64)
+	Slice bool
+
+	// Generate a sorting network that operates on an array, for example:
+	// NetworkSort2xFloat64Array(a *[2]float64)
+	Array bool
+
+	// Wrap the set of networks sorts produced for the different sizes of a given
+	// slice into a method that dispatches to the correct network by length, for example:
+	//
+	//	func NetworkSortFloat64(a []float64) (ok bool) {
+	//     switch len(a) {
+	//     case 2:
+	//         NetworkSort2xFloat64(a)
+	//     case 3:
+	//         NetworkSort3xFloat64(a)
+	//     default:
+	//         return false
+	//     }
+	//     return true
+	//	}
+	//
+	Wrap bool
 
 	// LessTemplate should presume the existence of the indexable 'a', which is the
 	// slice/array being sorted.
@@ -50,7 +70,7 @@ type Input struct {
 	GreaterTemplate *template.Template
 }
 
-func (in *Input) TypeNamePart() string {
+func (in *Input) typeNamePart() string {
 	typ := in.Type
 	if in.isComparableBuiltin() {
 		typ = strings.ToUpper(typ[:1]) + typ[1:]
@@ -58,12 +78,12 @@ func (in *Input) TypeNamePart() string {
 	return typ
 }
 
-func (in *Input) Name(exported bool, sz int, fwd bool, suffix string) (out string) {
+func (in *Input) name(exported bool, sz int, fwd bool, suffix string) (out string) {
 	prefix := "NetworkSort"
 	if !exported {
 		prefix = "networkSort"
 	}
-	out = fmt.Sprintf("%s%dx%s%s", prefix, sz, in.TypeNamePart(), suffix)
+	out = fmt.Sprintf("%s%dx%s%s", prefix, sz, in.typeNamePart(), suffix)
 	if !fwd {
 		out += "Reverse"
 	}
@@ -96,7 +116,7 @@ func (in *Input) ensureTemplates() error {
 		if in.isComparableBuiltin() {
 			in.LessTemplate = defaultCASLessTpl
 		} else {
-			return fmt.Errorf("no -less template provided for non-builtin input %q at index %d", in.Raw, in.Index+1)
+			return fmt.Errorf("no -less template provided for non-builtin input")
 		}
 	}
 
@@ -104,7 +124,7 @@ func (in *Input) ensureTemplates() error {
 		if in.isComparableBuiltin() {
 			in.GreaterTemplate = defaultCASGreaterTpl
 		} else {
-			return fmt.Errorf("no -greater template provided for non-builtin input %q at index %d", in.Raw, in.Index+1)
+			return fmt.Errorf("no -greater template provided for non-builtin input")
 		}
 	}
 
@@ -144,8 +164,6 @@ func ParseInput(s string, idx int) (input Input, err error) {
 		return input, fmt.Errorf("invalid input %q", s)
 	}
 
-	input.Raw = s
-	input.Index = idx
 	input.Package = match[inputPkg]
 	input.Type = match[inputTyp]
 
@@ -173,7 +191,7 @@ func ParseInput(s string, idx int) (input Input, err error) {
 
 		for i := from; i <= to; i++ {
 			if i <= 0 {
-				return input, fmt.Errorf("sort size must be >= 1, found %d at input %d", i, input.Index+1)
+				return input, fmt.Errorf("sort size must be >= 1, found %d", i)
 			}
 			sizeSet[int(i)] = true
 		}

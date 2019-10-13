@@ -21,11 +21,11 @@ func (g gen) Last() int {
 }
 
 func (g gen) SliceName() string {
-	return g.Input.Name(g.Input.isExported(), g.Network.Size, g.Forwards, "")
+	return g.Input.name(g.Input.isExported(), g.Network.Size, g.Forwards, "")
 }
 
 func (g gen) ArrayName() string {
-	return g.Input.Name(g.Input.isExported(), g.Network.Size, g.Forwards, "Array")
+	return g.Input.name(g.Input.isExported(), g.Network.Size, g.Forwards, "Array")
 }
 
 var genFuncs = template.FuncMap{
@@ -93,7 +93,7 @@ func (w wrapperGen) Name() string {
 	if !w.Forwards {
 		suffix = "Reverse"
 	}
-	return fmt.Sprintf("NetworkSort%s%s", w.Input.TypeNamePart(), suffix)
+	return fmt.Sprintf("NetworkSort%s%s", w.Input.typeNamePart(), suffix)
 }
 
 var wrapperTpl = template.Must(template.New("").Parse(`
