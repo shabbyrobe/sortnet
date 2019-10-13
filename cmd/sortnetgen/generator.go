@@ -91,15 +91,20 @@ type wrapperKey struct {
 type wrapperGen struct {
 	Input    Input
 	Forwards bool
+	Exported bool
 	Methods  map[int]string // template.Template visits these in order
 }
 
 func (w wrapperGen) Name() string {
+	prefix := "NetworkSort"
+	if !w.Exported {
+		prefix = "networkSort"
+	}
 	suffix := ""
 	if !w.Forwards {
 		suffix = "Reverse"
 	}
-	return fmt.Sprintf("NetworkSort%s%s", w.Input.typeNamePart(), suffix)
+	return fmt.Sprintf("%s%s%s", prefix, ucfirst(w.Input.Type), suffix)
 }
 
 var wrapperTpl = template.Must(template.New("").Parse(`

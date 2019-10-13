@@ -257,6 +257,7 @@ func (cmd *Command) Run(args ...string) (err error) {
 						wrappers[wrapperKey{inputIndex, fwd}] = &wrapperGen{
 							Input:    input,
 							Forwards: fwd,
+							Exported: input.isExported(),
 							Methods:  map[int]string{},
 						}
 					}

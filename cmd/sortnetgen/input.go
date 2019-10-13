@@ -69,20 +69,13 @@ type Input struct {
 	GreaterTemplate *template.Template
 }
 
-func (in *Input) typeNamePart() string {
-	typ := in.Type
-	if in.isComparableBuiltin() {
-		typ = strings.ToUpper(typ[:1]) + typ[1:]
-	}
-	return typ
-}
-
 func (in *Input) name(exported bool, sz int, fwd bool, suffix string) (out string) {
 	prefix := "NetworkSort"
 	if !exported {
 		prefix = "networkSort"
 	}
-	out = fmt.Sprintf("%s%dx%s%s", prefix, sz, in.typeNamePart(), suffix)
+	typ := ucfirst(in.Type)
+	out = fmt.Sprintf("%s%dx%s%s", prefix, sz, typ, suffix)
 	if !fwd {
 		out += "Reverse"
 	}
@@ -168,8 +161,8 @@ const (
 
 var inputPattern = regexp.MustCompile(`` +
 	`^` +
-	`(?:(?P<pkg>.*)\.)?` + // Greedy
-	`(?P<typ>.*?)` +
+	`(?:(?P<pkg>[\pL\d\/\.]+)\.)?` + // Greedy
+	`(?P<typ>\pL[\pL\d]*)` +
 	`$`,
 )
 
@@ -183,4 +176,8 @@ func ParseInput(s string) (input Input, err error) {
 	input.Type = match[inputTyp]
 
 	return input, nil
+}
+
+func ucfirst(s string) string {
+	return strings.ToUpper(s[:1]) + s[1:]
 }
