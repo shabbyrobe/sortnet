@@ -1,5 +1,7 @@
 package sortnet
 
+import "reflect"
+
 type CompareAndSwap struct {
 	From int
 	To   int
@@ -21,11 +23,11 @@ type Network struct {
 	Depth int
 }
 
-// SortInts is a convenience thst sorts the input list.
+// SortInts is a convenience that sorts the input list in place.
 //
-// Sorting networks are really only useful for small slices of a fixed size with a
-// generated sort function; use those or the sort package unless you really need this
-// convenience.
+// This will be slower than the `sortnetgen` sorting network, but is still
+// a fair bit faster than the stdlib for all the input sizes that have been
+// tested (<64).
 func (n Network) SortInts(vs []int) {
 	for _, c := range n.Ops {
 		if vs[c.From] > vs[c.To] {
@@ -34,12 +36,21 @@ func (n Network) SortInts(vs []int) {
 	}
 }
 
+// SortIntsReverse is a convenience that sorts the input list in place.
+//
+// See SortInts for caveats.
+func (n Network) SortIntsReverse(vs []int) {
+	for _, c := range n.Ops {
+		if vs[c.From] < vs[c.To] {
+			vs[c.From], vs[c.To] = vs[c.To], vs[c.From]
+		}
+	}
+}
+
 // SortIntsWithSwaps is a convenience that sorts the input list and returns the number of
 // swaps hat occurred.
 //
-// Sorting networks are really only useful for small slices of a fixed size with a
-// generated sort function; use those or the sort package unless you really need this
-// convenience.
+// See SortInts for caveats.
 func (n Network) SortIntsWithSwaps(vs []int) (swaps int) {
 	for _, c := range n.Ops {
 		if vs[c.From] > vs[c.To] {
@@ -48,4 +59,28 @@ func (n Network) SortIntsWithSwaps(vs []int) (swaps int) {
 		}
 	}
 	return swaps
+}
+
+// SortSlice is a convenience that sorts the input list in place.
+//
+// Unlike SortInts, this is currently _substantially_ slower than the stdlib. It
+// is not recommended for use at all, until and unless the egregious performance
+// can be dealt with.
+func (n Network) SortSlice(vs interface{}, less func(i, j int) bool) {
+	v := reflect.ValueOf(vs)
+	if v.Kind() != reflect.Slice {
+		panic("value is not a slice")
+	}
+	if v.Len() == 0 {
+		return
+	}
+
+	for _, c := range n.Ops {
+		if less(c.From, c.To) {
+			v1, v2 := v.Index(c.From), v.Index(c.To)
+			tmp := v1.Interface()
+			v1.Set(v2)
+			v2.Set(reflect.ValueOf(tmp))
+		}
+	}
 }

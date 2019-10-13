@@ -5,6 +5,8 @@ import (
 	"math/rand"
 	"sort"
 	"testing"
+
+	"github.com/shabbyrobe/sortnet"
 )
 
 func BenchmarkSortNetInts(b *testing.B) {
@@ -42,6 +44,15 @@ func BenchmarkSortNetInts(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				cur := ints.Take(b, tc.sz)
 				tc.sorter(cur)
+			}
+		})
+
+		b.Run(fmt.Sprintf("network-direct-%d", tc.sz), func(b *testing.B) {
+			ints.Reset(b)
+			net := sortnet.New(tc.sz)
+			for i := 0; i < b.N; i++ {
+				cur := ints.Take(b, tc.sz)
+				net.SortInts(cur)
 			}
 		})
 
@@ -100,6 +111,17 @@ func BenchmarkSortNetCustom(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				cur := customs.Take(b, tc.sz)
 				tc.sorter(cur)
+			}
+		})
+
+		b.Run(fmt.Sprintf("network-direct-%d", tc.sz), func(b *testing.B) {
+			customs.Reset(b)
+			net := sortnet.New(tc.sz)
+			for i := 0; i < b.N; i++ {
+				cur := customs.Take(b, tc.sz)
+				net.SortSlice(cur, func(i, j int) bool {
+					return cur[i].Foo < cur[j].Foo
+				})
 			}
 		})
 
