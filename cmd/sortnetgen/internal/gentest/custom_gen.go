@@ -2,12 +2,12 @@
 
 package gentest
 
-// NetworkSortCustom sorts the input according to its length using a sorting network
-// if one is available. If the sort was applied, 'ok' is true, otherwise it
-// is false to allow you to perform your own sort as a fallback.
+// NetworkSortCustom sorts the input according to its length ('sz') using a sorting network, if
+// one is available. If the sort was applied, 'ok' is true, otherwise it is false to allow
+// you to perform your own sort as a fallback.
 //
-func NetworkSortCustom(a []Custom) (ok bool) {
-	switch len(a) {
+func NetworkSortCustom(a []Custom, sz int) (ok bool) {
+	switch sz {
 	case 2:
 		NetworkSort2xCustom(a)
 	case 3:
@@ -52,12 +52,12 @@ func NetworkSortCustom(a []Custom) (ok bool) {
 	return true
 }
 
-// NetworkSortCustomReverse sorts the input according to its length using a sorting network
-// if one is available. If the sort was applied, 'ok' is true, otherwise it
-// is false to allow you to perform your own sort as a fallback.
+// NetworkSortCustomReverse sorts the input according to its length ('sz') using a sorting network, if
+// one is available. If the sort was applied, 'ok' is true, otherwise it is false to allow
+// you to perform your own sort as a fallback.
 //
-func NetworkSortCustomReverse(a []Custom) (ok bool) {
-	switch len(a) {
+func NetworkSortCustomReverse(a []Custom, sz int) (ok bool) {
+	switch sz {
 	case 2:
 		NetworkSort2xCustomReverse(a)
 	case 3:

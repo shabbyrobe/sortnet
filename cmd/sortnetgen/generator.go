@@ -16,6 +16,14 @@ type gen struct {
 	Forwards bool
 }
 
+func (g gen) SortKey() string {
+	dir := 1
+	if !g.Forwards {
+		dir = 2
+	}
+	return fmt.Sprintf("%s/%s/%012d/%d", g.Input.Package, g.Input.Type, g.Network.Size, dir)
+}
+
 func (g gen) Last() int {
 	return g.Network.Size - 1
 }
@@ -95,6 +103,14 @@ type wrapperGen struct {
 	Methods  map[int]string // template.Template visits these in order
 }
 
+func (w wrapperGen) SortKey() string {
+	dir := 1
+	if !w.Forwards {
+		dir = 2
+	}
+	return fmt.Sprintf("%s/%s/%d", w.Input.Package, w.Input.Type, dir)
+}
+
 func (w wrapperGen) Name() string {
 	prefix := "NetworkSort"
 	if !w.Exported {
@@ -109,12 +125,12 @@ func (w wrapperGen) Name() string {
 
 var wrapperTpl = template.Must(template.New("").Parse(`
 {{ if .Input.Wrap }}
-// {{.Name}} sorts the input according to its length using a sorting network
-// if one is available. If the sort was applied, 'ok' is true, otherwise it
-// is false to allow you to perform your own sort as a fallback.
+// {{.Name}} sorts the input according to its length ('sz') using a sorting network, if
+// one is available. If the sort was applied, 'ok' is true, otherwise it is false to allow
+// you to perform your own sort as a fallback.
 //
-func {{.Name}}(a []{{.Input.Type}}) (ok bool) {
-	switch len(a) {
+func {{.Name}}(a []{{.Input.Type}}, sz int) (ok bool) {
+	switch sz {
 	{{- range $sz, $name := .Methods }}
 	case {{$sz}}:
 		{{$name}}(a)

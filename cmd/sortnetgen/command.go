@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"sort"
 	"strings"
 	"text/template"
 
@@ -220,7 +221,8 @@ func (cmd *Command) Run(args ...string) (err error) {
 	}
 
 	var genBuf bytes.Buffer
-	var wrappers = map[wrapperKey]*wrapperGen{}
+	var wrappersIndex = map[wrapperKey]*wrapperGen{}
+	var wrappers []*wrapperGen
 
 	{ // Individual networks
 		var gens []gen
@@ -244,18 +246,23 @@ func (cmd *Command) Run(args ...string) (err error) {
 				for _, fwd := range fwds {
 					g.Forwards = fwd
 					gens = append(gens, g)
-					if wg := wrappers[wrapperKey{inputIndex, fwd}]; wg == nil {
-						wrappers[wrapperKey{inputIndex, fwd}] = &wrapperGen{
+					wg := wrappersIndex[wrapperKey{inputIndex, fwd}]
+					if wg == nil {
+						wg = &wrapperGen{
 							Input:    input,
 							Forwards: fwd,
 							Exported: input.isExported(),
 							Methods:  map[int]string{},
 						}
+						wrappersIndex[wrapperKey{inputIndex, fwd}] = wg
+						wrappers = append(wrappers, wg)
 					}
-					wrappers[wrapperKey{inputIndex, fwd}].Methods[sz] = g.SliceName()
+					wg.Methods[sz] = g.SliceName()
 				}
 			}
 		}
+
+		sort.Slice(gens, func(i, j int) bool { return gens[i].SortKey() < gens[j].SortKey() })
 
 		for _, gen := range gens {
 			if err := genTpl.Execute(&genBuf, gen); err != nil {
@@ -265,6 +272,8 @@ func (cmd *Command) Run(args ...string) (err error) {
 	}
 
 	{ // Wrappers
+		sort.Slice(wrappers, func(i, j int) bool { return wrappers[i].SortKey() < wrappers[j].SortKey() })
+
 		for _, wrapper := range wrappers {
 			if err := wrapperTpl.Execute(&buf, wrapper); err != nil {
 				return err
