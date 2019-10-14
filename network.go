@@ -60,7 +60,7 @@ func (n Network) SortInt64s(vs []int64) {
 // See SortInts for caveats.
 func (n Network) SortInt64sReverse(vs []int64) {
 	for _, c := range n.Ops {
-		if vs[c.From] > vs[c.To] {
+		if vs[c.From] < vs[c.To] {
 			vs[c.From], vs[c.To] = vs[c.To], vs[c.From]
 		}
 	}
@@ -80,7 +80,7 @@ func (n Network) SortUint64s(vs []uint64) {
 // See SortInts for caveats.
 func (n Network) SortUint64sReverse(vs []uint64) {
 	for _, c := range n.Ops {
-		if vs[c.From] > vs[c.To] {
+		if vs[c.From] < vs[c.To] {
 			vs[c.From], vs[c.To] = vs[c.To], vs[c.From]
 		}
 	}
@@ -100,7 +100,7 @@ func (n Network) SortFloat64s(vs []float64) {
 // See SortInts for caveats.
 func (n Network) SortFloat64sReverse(vs []float64) {
 	for _, c := range n.Ops {
-		if vs[c.From] > vs[c.To] {
+		if vs[c.From] < vs[c.To] {
 			vs[c.From], vs[c.To] = vs[c.To], vs[c.From]
 		}
 	}

@@ -62,7 +62,6 @@ func TestNetworks(t *testing.T) {
 
 				sort.Slice(stdSorted, func(i, j int) bool { return stdSorted[i] > stdSorted[j] })
 				net.SortIntsReverse(netSorted)
-
 				if !reflect.DeepEqual(stdSorted, netSorted) {
 					t.Fatal(sortDiffMsg(net, stdSorted, netSorted))
 				}
