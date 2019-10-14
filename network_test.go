@@ -56,20 +56,30 @@ func TestNetworks(t *testing.T) {
 
 				sort.Ints(stdSorted)
 				net.SortInts(netSorted)
+				if !reflect.DeepEqual(stdSorted, netSorted) {
+					t.Fatal(sortDiffMsg(net, stdSorted, netSorted))
+				}
+
+				sort.Slice(stdSorted, func(i, j int) bool { return stdSorted[i] > stdSorted[j] })
+				net.SortIntsReverse(netSorted)
 
 				if !reflect.DeepEqual(stdSorted, netSorted) {
-					exp := []string{}
-					out := []string{}
-					for p := 0; p < net.Size; p++ {
-						exp = append(exp, fmt.Sprintf("%-5d", stdSorted[p]))
-						out = append(out, fmt.Sprintf("%-5d", netSorted[p]))
-					}
-					msg := fmt.Sprintf("\nexp: %s\nout: %s\n", strings.Join(exp, " "), strings.Join(out, " "))
-					t.Fatal(msg)
+					t.Fatal(sortDiffMsg(net, stdSorted, netSorted))
 				}
 			}
 		})
 	}
+}
+
+func sortDiffMsg(net Network, exp, out []int) string {
+	expm := []string{}
+	outm := []string{}
+	for p := 0; p < net.Size; p++ {
+		expm = append(expm, fmt.Sprintf("%-5d", exp[p]))
+		outm = append(outm, fmt.Sprintf("%-5d", out[p]))
+	}
+	msg := fmt.Sprintf("\nexp: %s\nout: %s\n", strings.Join(expm, " "), strings.Join(outm, " "))
+	return msg
 }
 
 var (
