@@ -4,7 +4,7 @@ Sorting Network Generator for Go
 Fast zero-allocation sorting networks for Go. Useful when attempting to sort
 easily compared values in very short lists. The sorting networks remain faster
 than stdlib sort up to at least 128 items, but the generated code starts to
-get quite large after about 32. YMMV.
+get quite large after about 32 (and truly ridiculous by 256). YMMV.
 
 Those "64 bytes-per-op" in the benchmark allocations might not seem like much,
 but this was put together to help out with some color sorting being done on

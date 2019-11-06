@@ -13,6 +13,9 @@ func (c CompareAndSwap) Reverse() CompareAndSwap {
 }
 
 type Network struct {
+	// XXX: could also attempt to track parallelism?
+	// http://www.angelfire.com/blog/ronz/Articles/999SortingNetworksReferen.html
+
 	Kind string
 	Ops  []CompareAndSwap
 	Size int
