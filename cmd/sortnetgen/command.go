@@ -67,7 +67,7 @@ type inputFlags struct {
 	slice           bool
 	wrap            bool
 	forward         bool
-	forceExport     bool
+	export          optionalBool
 	reverse         bool
 	sizes           sizeSpec
 }
@@ -88,7 +88,7 @@ func (i *inputFlags) Flags(flags *flag.FlagSet) {
 	flags.BoolVar(&i.array, "array", i.array, "Generate fixed-length array sorters")
 	flags.BoolVar(&i.slice, "slice", i.slice, "Generate slice sorters")
 	flags.BoolVar(&i.wrap, "wrap", i.wrap, "Generate wrapper sorter that chooses the right sort based on len(a)")
-	flags.BoolVar(&i.forceExport, "export", false, "Always export the following sorters, even if the type itself is not exported (needed for builtins)")
+	flags.Var(&i.export, "export", "Explicitly declare whether or not to export the following sorters. Defaults to 'true' for builtins and exported types")
 	flags.StringVar(&i.greaterTemplate, "greater", i.greaterTemplate, "Template for 'compare-and-swap' function")
 	flags.StringVar(&i.lessTemplate, "less", i.lessTemplate, "Like -greater, except used for reverse sorting")
 	flags.Var(&i.sizes, "size", "Size set; comma separated list of individual sizes or ranges")
@@ -173,7 +173,11 @@ func (cmd *Command) readInputs(args []string) ([]Input, error) {
 		input.Forward = curArgs.forward
 		input.Reverse = curArgs.reverse
 		input.Sizes = curArgs.sizes.items
-		input.ForceExport = curArgs.forceExport
+
+		if curArgs.export.IsSet {
+			exported := curArgs.export.Value
+			input.Export = &exported
+		}
 
 		input.LessTemplate, err = curArgs.BuildLessTemplate()
 		if err != nil {

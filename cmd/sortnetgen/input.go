@@ -11,12 +11,12 @@ import (
 )
 
 type Input struct {
-	Forward     bool
-	Reverse     bool
-	Sizes       []int
-	Package     string
-	Type        string
-	ForceExport bool
+	Forward bool
+	Reverse bool
+	Sizes   []int
+	Package string
+	Type    string
+	Export  *bool // leave nil to autodetect
 
 	// Generate a sorting network that operates on a slice, for example:
 	// NetworkSort2xFloat64(a []float64)
@@ -84,8 +84,8 @@ func (in *Input) name(exported bool, sz int, fwd bool, suffix string) (out strin
 }
 
 func (in *Input) isExported() bool {
-	if in.ForceExport {
-		return true
+	if in.Export != nil {
+		return *in.Export
 	}
 	r, _ := utf8.DecodeRuneInString(in.Type)
 	return in.isComparableBuiltin() || unicode.IsUpper(r)
