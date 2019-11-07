@@ -33,15 +33,15 @@ the command line, it's required. Examples below will presume `-pkg` is _not_ req
 
 Generate forward and reverse sorting network of sizes 3-5 for float64:
 
-    sortnetgen -fwd -rev -size 3-5 float64
+    sortnetgen -fwd -rev -export -size 3-5 float64
 
 Generate forward sorting network of sizes 3-5 for int64
 
-    sortnetgen -fwd -size 3-5 int64
+    sortnetgen -fwd -export -size 3-5 int64
 
 Generate reverse sorting network of sizes 3, 4, 5 and 9 for string:
 
-    sortnetgen -rev size 3-5, string
+    sortnetgen -rev -export size 3-5, string
 
 The type will be the basis for the comparison. If `<input>` is a builtin primitive, `<` is
 used for comparisons, otherwise -greater and -less are used to determine how to compare
