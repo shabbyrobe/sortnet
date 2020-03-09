@@ -1,4 +1,4 @@
-module github.com/shabbyrobe/cmd/sortnetgen
+module github.com/shabbyrobe/sortnet/cmd/sortnetgen
 
 go 1.13
 
